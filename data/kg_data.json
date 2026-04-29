@@ -1,0 +1,36 @@
+{
+    "ontology": {
+        "classes": [
+            "Entity",
+            "Concept",
+            "Location"
+        ],
+        "subclasses": []
+    },
+    "knowledge_base": {
+        "instances": {
+            "Alan_Turing_(Person)": "Entity",
+            "NIL_计算机科学家": "Concept",
+            "NIL_冯·诺依曼": "Entity",
+            "NIL_姚期智": "Entity",
+            "NIL_英国": "Location"
+        },
+        "triples": [
+            [
+                "Alan_Turing_(Person)",
+                "Is-A",
+                "NIL_计算机科学家"
+            ],
+            [
+                "NIL_冯·诺依曼",
+                "Is-A",
+                "NIL_计算机科学家"
+            ],
+            [
+                "NIL_姚期智",
+                "Is-A",
+                "NIL_计算机科学家"
+            ]
+        ]
+    }
+}
