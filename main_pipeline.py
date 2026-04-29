@@ -2,57 +2,61 @@ from core.kg_storage import KnowledgeStorage
 from core.kg_extraction import KnowledgeExtractor
 from core.kg_disambiguation import EntityLinker
 from core.kg_fusion import KnowledgeFuser
+from core.kg_relation_extraction import RelationExtractor
+
 
 def run_pipeline():
-    print("====== 2026知识工程 知识图谱 ======\n")
+    print("====== 2026知识工程 知识图谱流水线 ======\n")
 
-    # 1. 初始化模块
+    # 1. 初始化
     storage = KnowledgeStorage()
-    extractor = KnowledgeExtractor()
+    ner_extractor = KnowledgeExtractor()
     linker = EntityLinker()
     fuser = KnowledgeFuser(storage)
+    relation_extractor = RelationExtractor()
 
-    # 2. 模拟网络爬虫传来的实时纯文本 (非结构化数据)
+    # 2. 模拟爬虫实时传来的纯文本流 (非结构化数据)
     raw_texts = [
-        "计算机科学家包括图灵、冯·诺依曼和姚期智。",
-        "艾伦图灵曾在英国布莱切利园工作。",
-        "图灵在1950年发表了划时代的论文。"
+        "阿兰·图灵在1936年提出了图灵机，它是现代计算机科学的基础。",
+        "艾伦图灵曾在英国布莱切利园秘密破译密码。",
+        "作为计算机科学的奠基人，图灵荣获了无数后人的赞誉。"
     ]
 
-    # 3. 执行流水线处理
+    # 3. 执行流水线
     for text in raw_texts:
         print(f"\n>>> 正在处理文本: '{text}'")
 
-        # 知识抽取
-        entities = extractor.extract_entities(text)
-        new_triples = extractor.extract_relations_hearst(text)
+        # 命名实体识别
+        entities = ner_extractor.extract_entities(text)
+        if len(entities) < 2:
+            print("  -> 实体数量不足以构成关系，跳过。")
+            continue
 
-        # 实体消歧
-        for triple in new_triples:
-            head_raw, rel, tail_raw = triple
-            head_standard = linker.link_entity(head_raw, context=text)
-            tail_standard = linker.link_entity(tail_raw, context=text)
+        # 开放式关系抽取
+        # 将文本和识别出的实体送入模型，抽取出实体间的动词关系
+        raw_triples = relation_extractor.extract_open_relations(text, entities)
 
-            print(f"    [EL 消歧] '{head_raw}' -> 链接至 '{head_standard}'")
+        # 实体消歧与链接
+        for head_raw, rel, tail_raw in raw_triples:
+            head_std = linker.link_entity(head_raw, context=text)
+            tail_std = linker.link_entity(tail_raw, context=text)
+            print(f"    [消歧] '{head_raw}' -> '{head_std}', '{tail_raw}' -> '{tail_std}'")
 
-            # 存入知识库
-            storage.add_instance(head_standard, "Entity")
-            storage.add_instance(tail_standard, "Concept")
-            storage.add_triple(head_standard, rel, tail_standard)
+            # 结构化入库
 
-        # 针对单纯抽取的实体添加入库
-        for ent in entities:
-            ent_std = linker.link_entity(ent["entity"], context=text)
-            storage.add_instance(ent_std, ent["type"])
+            storage.add_instance(head_std, "Entity")
+            storage.add_instance(tail_std, "Entity")
+            storage.add_triple(head_std, rel, tail_std)
 
-    # 知识融合与对齐
-    print("\n>>> 执行知识库一致性检查与融合对齐...")
+    # 知识融合与消冗
+    print("\n>>> 执行全库实体对齐与融合 (Entity Alignment)...")
     fuser.fuse_entities(threshold=0.6)
 
-    # 数据持久化保存
+    # 数据持久化
     print("\n>>> 保存至硬盘...")
     storage.save()
-    print("\n====== 执行完毕。 ======")
+    print("\n====== 流水线执行完毕。 ======")
+
 
 if __name__ == "__main__":
     run_pipeline()

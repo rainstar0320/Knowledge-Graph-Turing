@@ -2,8 +2,19 @@ import re
 
 class KnowledgeExtractor:
     def __init__(self):
-        # 预置的基础词典 (未来可替换为深度学习模型，如BiLSTM-CRF)
-        self.dict_ner = {"阿兰·图灵": "Person", "人工智能": "Field", "英国": "Location"}
+        # 预置的基础词典 (扩充了词汇量，解决OOV未登录词问题)
+        self.dict_ner = {
+            "阿兰·图灵": "Person",
+            "艾伦图灵": "Person",
+            "图灵": "Person",
+            "姚期智": "Person",
+            "冯·诺依曼": "Person",
+            "图灵机": "Concept",
+            "计算机科学": "Field",
+            "人工智能": "Field",
+            "英国": "Location",
+            "布莱切利园": "Location"
+        }
 
     def extract_entities(self, text):
         """基于词典的快速 NER"""

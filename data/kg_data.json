@@ -1,9 +1,9 @@
 {
     "ontology": {
         "classes": [
-            "Entity",
+            "Location",
             "Concept",
-            "Location"
+            "Entity"
         ],
         "subclasses": []
     },
@@ -13,9 +13,51 @@
             "NIL_计算机科学家": "Concept",
             "NIL_冯·诺依曼": "Entity",
             "NIL_姚期智": "Entity",
-            "NIL_英国": "Location"
+            "NIL_英国": "Entity",
+            "NIL_阿兰·图灵": "Entity",
+            "NIL_布莱切利园": "Entity"
         },
         "triples": [
+            [
+                "NIL_阿兰·图灵",
+                "曾",
+                "NIL_英国"
+            ],
+            [
+                "Alan_Turing_(Person)",
+                "1936年提出",
+                "NIL_艾伦图灵"
+            ],
+            [
+                "NIL_艾伦图灵",
+                "，它是现代",
+                "NIL_计算机科学家"
+            ],
+            [
+                "NIL_姚期智",
+                "Is-A",
+                "NIL_计算机科学家"
+            ],
+            [
+                "NIL_计算机科学家",
+                "奠基人，",
+                "Alan_Turing_(Person)"
+            ],
+            [
+                "NIL_阿兰·图灵",
+                "曾在英国",
+                "NIL_布莱切利园"
+            ],
+            [
+                "Alan_Turing_(Person)",
+                "曾",
+                "NIL_英国"
+            ],
+            [
+                "Alan_Turing_(Person)",
+                "曾在英国",
+                "NIL_布莱切利园"
+            ],
             [
                 "Alan_Turing_(Person)",
                 "Is-A",
@@ -27,9 +69,9 @@
                 "NIL_计算机科学家"
             ],
             [
-                "NIL_姚期智",
-                "Is-A",
-                "NIL_计算机科学家"
+                "NIL_阿兰·图灵",
+                "1936年提出",
+                "NIL_艾伦图灵"
             ]
         ]
     }
