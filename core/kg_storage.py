@@ -1,52 +1,70 @@
-import json
-import os
+# ==========================================
+# 架构升级：引入 Neo4j 图数据库作为底层存储引擎
+# 机制：使用 Cypher 的 MERGE 语句实现“存在则更新，不存在则创建”
+# ==========================================
+
+from neo4j import GraphDatabase
+import re
+
 
 class KnowledgeStorage:
-    def __init__(self, filepath="data/kg_data.json"):
-        self.filepath = filepath
-        # TBox (模式层/本体层)
-        self.ontology = {
-            "classes": set(),
-            "subclasses": []
-        }
-        # ABox (数据层/实例层)
-        self.knowledge_base = {
-            "instances": {},        # 实体->类型
-            "triples": []           # 事实三元组
-        }
-        self.load()
+    def __init__(self, uri="bolt://localhost:7687", user="neo4j", password="20050320txl"):
+        # 请将这里的 password 改为你刚才在 Neo4j Desktop 中设置的密码
+        try:
+            self.driver = GraphDatabase.driver(uri, auth=(user, password))
+            self.driver.verify_connectivity()
+            print("[Storage] 成功连接到 Neo4j 图数据库！")
+        except Exception as e:
+            print(f"[Storage] 连接 Neo4j 失败，请检查数据库是否启动以及密码是否正确。\n错误信息: {e}")
 
-    def add_class(self, class_name):
-        self.ontology["classes"].add(class_name)
+    def close(self):
+        """关闭数据库连接"""
+        if self.driver:
+            self.driver.close()
+            print("[Storage] 数据库连接已安全关闭。")
 
-    def add_instance(self, entity, class_name):
-        self.knowledge_base["instances"][entity] = class_name
-        self.add_class(class_name)
+    def _clean_label(self, label):
+        """清洗标签名称，因为 Neo4j 的 Label 和 Relation 类别不支持空格和特殊符号"""
+        cleaned = re.sub(r'[^\w\u4e00-\u9fa5]', '_', label)
+        return cleaned if cleaned else "Entity"
+
+    def add_instance(self, entity_name, class_name):
+        """向图中添加实体节点 (ABox) 和 标签类型 (TBox)"""
+        clean_class = self._clean_label(class_name)
+
+        # ⚠️ 注意这里 n: 的后面加上了反引号 ` `，防止非标准字符报错
+        query = f"""
+        MERGE (n:`{clean_class}` {{name: $name}})
+        SET n.updated_at = timestamp()
+        """
+        with self.driver.session() as session:
+            session.run(query, name=entity_name)
 
     def add_triple(self, head, relation, tail):
-        triple = [head, relation, tail]
-        if triple not in self.knowledge_base["triples"]:
-            self.knowledge_base["triples"].append(triple)
+        """向图中添加事实关系边"""
+        clean_rel = self._clean_label(relation)
+
+        # ⚠️ 注意这里 r: 的后面加上了反引号 ` `，允许关系名以数字开头！
+        query = f"""
+        MERGE (h {{name: $head}})
+        MERGE (t {{name: $tail}})
+        MERGE (h)-[r:`{clean_rel}`]->(t)
+        SET r.updated_at = timestamp()
+        """
+        with self.driver.session() as session:
+            session.run(query, head=head, tail=tail)
 
     def save(self):
-        """持久化存储到JSON"""
-        os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        data = {
-            "ontology": {
-                "classes": list(self.ontology["classes"]),
-                "subclasses": self.ontology["subclasses"]
-            },
-            "knowledge_base": self.knowledge_base
-        }
-        with open(self.filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        print(f"[Storage] 知识图谱已保存至 {self.filepath}，当前三元组数量: {len(self.knowledge_base['triples'])}")
+        """保留此接口为兼容流水线"""
+        print("[Storage] Neo4j 图数据库已实时落盘，无须额外 save 操作。")
 
-    def load(self):
-        if os.path.exists(self.filepath):
-            with open(self.filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.ontology["classes"] = set(data["ontology"]["classes"])
-                self.ontology["subclasses"] = data["ontology"]["subclasses"]
-                self.knowledge_base = data["knowledge_base"]
-            print("[Storage] 已加载历史知识图谱数据。")
+    def get_graph_stats(self):
+        """获取当前数据库的统计信息"""
+        query = """
+        MATCH (n) WITH count(n) AS node_count
+        MATCH ()-[r]->() RETURN node_count, count(r) AS edge_count
+        """
+        with self.driver.session() as session:
+            result = session.run(query).single()
+            if result:
+                print(f"[Storage] 数据库统计 -> 节点数: {result['node_count']} | 关系数: {result['edge_count']}")
