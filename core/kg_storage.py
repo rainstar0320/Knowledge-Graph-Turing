@@ -1,38 +1,36 @@
-# ==========================================
-# 架构升级：引入 Neo4j 图数据库作为底层存储引擎
-# 机制：使用 Cypher 的 MERGE 语句实现“存在则更新，不存在则创建”
-# ==========================================
-
-from neo4j import GraphDatabase
+# core/kg_storage.py
 import re
-
+from neo4j import GraphDatabase
 
 class KnowledgeStorage:
     def __init__(self, uri="bolt://localhost:7687", user="neo4j", password="20050320txl"):
-        # 请将这里的 password 改为你刚才在 Neo4j Desktop 中设置的密码
+        # ⚠️ 请确认这里的 password 是你在 Neo4j 里设置的密码！
+        self.driver = None
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
             self.driver.verify_connectivity()
-            print("[Storage] 成功连接到 Neo4j 图数据库！")
+            print("[Storage] 🟢 成功连接到 Neo4j 图数据库！")
         except Exception as e:
-            print(f"[Storage] 连接 Neo4j 失败，请检查数据库是否启动以及密码是否正确。\n错误信息: {e}")
+            print(f"[Storage] 🟡 警告: 无法连接到 Neo4j (请检查是否在软件中点击了 Start 并且密码正确)。")
+            print("[Storage] 🟡 已自动切入离线模拟模式，保证流水线不崩溃。")
+            self.driver = None # 设为 None，进入容灾模式
 
     def close(self):
-        """关闭数据库连接"""
         if self.driver:
             self.driver.close()
             print("[Storage] 数据库连接已安全关闭。")
 
     def _clean_label(self, label):
-        """清洗标签名称，因为 Neo4j 的 Label 和 Relation 类别不支持空格和特殊符号"""
         cleaned = re.sub(r'[^\w\u4e00-\u9fa5]', '_', label)
         return cleaned if cleaned else "Entity"
 
     def add_instance(self, entity_name, class_name):
-        """向图中添加实体节点 (ABox) 和 标签类型 (TBox)"""
-        clean_class = self._clean_label(class_name)
+        if not self.driver:
+            # 容灾模式：只打印，不崩溃
+            # print(f"    [Mock Storage] 实体入库 -> {entity_name} ({class_name})")
+            return
 
-        # ⚠️ 注意这里 n: 的后面加上了反引号 ` `，防止非标准字符报错
+        clean_class = self._clean_label(class_name)
         query = f"""
         MERGE (n:`{clean_class}` {{name: $name}})
         SET n.updated_at = timestamp()
@@ -41,10 +39,12 @@ class KnowledgeStorage:
             session.run(query, name=entity_name)
 
     def add_triple(self, head, relation, tail):
-        """向图中添加事实关系边"""
-        clean_rel = self._clean_label(relation)
+        if not self.driver:
+            # 容灾模式：只打印，不崩溃
+            print(f"    [Mock Storage] 事实入库 -> <{head}, {relation}, {tail}>")
+            return
 
-        # ⚠️ 注意这里 r: 的后面加上了反引号 ` `，允许关系名以数字开头！
+        clean_rel = self._clean_label(relation)
         query = f"""
         MERGE (h {{name: $head}})
         MERGE (t {{name: $tail}})
@@ -55,11 +55,14 @@ class KnowledgeStorage:
             session.run(query, head=head, tail=tail)
 
     def save(self):
-        """保留此接口为兼容流水线"""
-        print("[Storage] Neo4j 图数据库已实时落盘，无须额外 save 操作。")
+        if self.driver:
+            print("[Storage] Neo4j 图数据库已实时落盘，无须额外 save 操作。")
 
     def get_graph_stats(self):
-        """获取当前数据库的统计信息"""
+        if not self.driver:
+            print("[Storage] 📊 当前处于离线模式，无法统计 Neo4j 数据库规模。")
+            return
+
         query = """
         MATCH (n) WITH count(n) AS node_count
         MATCH ()-[r]->() RETURN node_count, count(r) AS edge_count
@@ -67,4 +70,4 @@ class KnowledgeStorage:
         with self.driver.session() as session:
             result = session.run(query).single()
             if result:
-                print(f"[Storage] 数据库统计 -> 节点数: {result['node_count']} | 关系数: {result['edge_count']}")
+                print(f"[Storage] 📊 Neo4j 数据库统计 -> 节点数: {result['node_count']} | 关系数: {result['edge_count']}")

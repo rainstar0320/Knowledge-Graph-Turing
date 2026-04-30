@@ -1,54 +1,74 @@
+# main_pipeline.py
+import wikipedia
 from core.kg_storage import KnowledgeStorage
-from core.kg_extraction import KnowledgeExtractor
+from core.kg_extraction import DeepKnowledgeExtractor
 from core.kg_disambiguation import EntityLinker
-from core.kg_fusion import KnowledgeFuser
-from core.kg_relation_extraction import RelationExtractor
+from core.kg_fusion import DeepKnowledgeFuser
+
+
+def fetch_wiki_summary(keyword):
+    """解除封印的网络爬虫：抓取完整的百科摘要"""
+    wikipedia.set_lang("zh")
+    print(f"\n[Spider] 正在实时爬取网络数据: '{keyword}'...")
+    try:
+        # 取完整的摘要内容 (不再限制前两句！)
+        text = wikipedia.summary(keyword)
+        # 简单清洗一下文本，去掉换行符
+        text = text.replace('\n', ' ').replace('\r', '')
+        print(f"[Spider] 🟢 爬取成功！获取文本长度: {len(text)} 字符")
+        return text
+    except Exception as e:
+        print(f"[Spider] 🔴 爬取失败: {e}")
+        return ""
 
 
 def run_pipeline():
-    print("====== 2026知识工程 - 自动化知识图谱 ======\n")
+    print("====== 2026知识工程(AI) - 自动化知识图谱流水线 (火力全开版) ======\n")
 
-    # 1. 初始化全生命周期组件
     storage = KnowledgeStorage()
-    ner_extractor = KnowledgeExtractor()
+    dl_extractor = DeepKnowledgeExtractor()
     linker = EntityLinker()
-    fuser = KnowledgeFuser(storage)
-    relation_extractor = RelationExtractor()
-    # 2. 模拟网络爬虫实时传来的纯文本流
-    raw_texts = [
-        "阿兰·图灵在1936年提出了图灵机，它是现代计算机科学的基础。",
-        "艾伦图灵曾在英国布莱切利园秘密破译密码。",
-        "作为计算机科学的奠基人，图灵荣获了无数后人的赞誉。"
+    dl_fuser = DeepKnowledgeFuser(storage)
+
+    # 🚀 扩充我们的种子库！让系统去爬取几十个相关词条
+    targets = [
+        "阿兰·图灵", "约翰·冯·诺伊曼", "姚期智", "吴恩达", "李飞飞",
+        "计算机科学", "人工智能", "机器学习", "深度学习", "图灵奖",
+        "清华大学", "麻省理工学院", "斯坦福大学", "剑桥大学",
+        "苹果公司", "微软", "谷歌", "OpenAI",
+        "第二次世界大战", "密码学", "诺贝尔奖"
     ]
-    # 3. 执行流水线
+
+    raw_texts = []
+    for t in targets:
+        txt = fetch_wiki_summary(t)
+        if txt:
+            raw_texts.append(txt)
+
+    # 2. 核心大模型处理流 (因为文本变多了，这里会跑几分钟，请让 CPU 飞一会儿)
+    print(f"\n>>> 准备处理 {len(raw_texts)} 篇长文本，大模型全速运转中...")
     for text in raw_texts:
-        print(f"\n>>> 正在处理文本: '{text}'")
+        entities = dl_extractor.extract_entities(text)
+        if len(entities) < 2: continue
 
-        entities = ner_extractor.extract_entities(text)
-        if len(entities) < 2:
-            print("  -> 实体数量不足以构成关系，跳过。")
-            continue
-
-        raw_triples = relation_extractor.extract_open_relations(text, entities)
+        raw_triples = dl_extractor.joint_relation_extraction(text, entities)
 
         for head_raw, rel, tail_raw in raw_triples:
-            # 消歧
             head_std = linker.link_entity(head_raw, context=text)
             tail_std = linker.link_entity(tail_raw, context=text)
-            print(f"    [消歧] '{head_raw}' -> '{head_std}', '{tail_raw}' -> '{tail_std}'")
 
-            # 入库 (现在实时写入Neo4j了)
             storage.add_instance(head_std, "Entity")
             storage.add_instance(tail_std, "Entity")
             storage.add_triple(head_std, rel, tail_std)
 
-    # 知识融合 (暂略，因为 Neo4j 内部需要使用专门的 Graph Refactoring 算法融合，我们后续用图算法实现)
-    # fuser.fuse_entities(threshold=0.6)
+    # 3. 大模型向量融合
+    print("\n>>> 开始全库实体对齐与融合 (清理垃圾节点)...")
+    dl_fuser.deep_entity_alignment(similarity_threshold=0.85)
 
-    print("\n>>> 处理完毕！查询当前图谱状态...")
     storage.get_graph_stats()
     storage.close()
-    print("\n====== 流水线执行完毕 ======")
+    print("\n====== 流水线执行完毕！快去刷新网页看看！ ======")
+
 
 if __name__ == "__main__":
     run_pipeline()
